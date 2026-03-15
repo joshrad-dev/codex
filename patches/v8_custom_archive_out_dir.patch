@@ -1,0 +1,19 @@
+--- a/build.rs
++++ b/build.rs
+@@ -578,6 +578,16 @@
+ }
+ 
+ fn static_lib_dir() -> PathBuf {
++  if env::var_os("RUSTY_V8_ARCHIVE").is_some() {
++    return PathBuf::from(
++      env::var_os("OUT_DIR").expect(
++        "The 'OUT_DIR' environment is not set (it should be something like \
++         'target/debug/rusty_v8-{hash}').",
++      ),
++    )
++    .join("gn_out")
++    .join("obj");
++  }
+   build_dir().join("gn_out").join("obj")
+ }
+ 

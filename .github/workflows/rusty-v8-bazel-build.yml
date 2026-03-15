@@ -1,0 +1,86 @@
+name: rusty-v8-canary
+
+on:
+  pull_request:
+    paths:
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".github/workflows/ci.bazelrc"
+      - ".github/workflows/rusty-v8-bazel-build.yml"
+      - ".github/workflows/rusty-v8-release.yml"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - "codex-rs/v8-poc/**"
+      - "patches/**"
+      - "third_party/v8/**"
+      - "**/*.bzl"
+      - "**/BUILD"
+      - "**/BUILD.bazel"
+  push:
+    branches:
+      - main
+    paths:
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".github/workflows/ci.bazelrc"
+      - ".github/workflows/rusty-v8-bazel-build.yml"
+      - ".github/workflows/rusty-v8-release.yml"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - "codex-rs/v8-poc/**"
+      - "patches/**"
+      - "third_party/v8/**"
+      - "**/*.bzl"
+      - "**/BUILD"
+      - "**/BUILD.bazel"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}::${{ github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+jobs:
+  bazel-canary:
+    name: Bazel canary
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Bazel
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: bazel test codex-rs/v8-poc
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bazel_args=(
+            test
+            --platforms=@llvm//platforms:linux_amd64
+            //codex-rs/v8-poc:v8-poc-test
+            --test_verbose_timeout_warnings
+            --build_metadata=REPO_URL=https://github.com/${GITHUB_REPOSITORY}.git
+            --build_metadata=COMMIT_SHA=$(git rev-parse HEAD)
+            --build_metadata=ROLE=CI
+            --build_metadata=VISIBILITY=PUBLIC
+          )
+
+          if [[ -n "${BUILDBUDDY_API_KEY:-}" ]]; then
+            bazel \
+              --noexperimental_remote_repo_contents_cache \
+              --bazelrc=.github/workflows/ci.bazelrc \
+              "${bazel_args[@]}" \
+              "--remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}"
+          else
+            bazel \
+              --noexperimental_remote_repo_contents_cache \
+              "${bazel_args[@]}" \
+              --remote_cache= \
+              --remote_executor=
+          fi
