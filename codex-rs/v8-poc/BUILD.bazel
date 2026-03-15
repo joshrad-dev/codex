@@ -9,12 +9,9 @@ package(default_visibility = ["//visibility:public"])
 
 PACKAGE_NAME = "codex-rs/v8-poc/Cargo.toml"
 
-LINUX_X86_64_CONSTRAINTS = [
+GNU_CONSTRAINTS = [
     "@platforms//os:linux",
     "@platforms//cpu:x86_64",
-]
-
-GNU_CONSTRAINTS = LINUX_X86_64_CONSTRAINTS + [
     "@llvm//constraints/libc:gnu.2.28",
 ]
 
@@ -28,7 +25,6 @@ rust_library(
     ),
     edition = "2024",
     srcs = ["src/lib.rs"],
-    target_compatible_with = LINUX_X86_64_CONSTRAINTS,
 )
 
 rust_test(
@@ -50,5 +46,4 @@ rust_binary(
     deps = [":v8-poc"],
     edition = "2024",
     srcs = ["src/smoke_test.rs"],
-    target_compatible_with = LINUX_X86_64_CONSTRAINTS,
 )

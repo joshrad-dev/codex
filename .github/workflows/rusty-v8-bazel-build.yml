@@ -41,8 +41,8 @@ concurrency:
 
 jobs:
   bazel-canary:
-    name: Bazel canary - ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
+    name: Bazel canary - ${{ matrix.target }}
+    runs-on: ${{ matrix.runs_on || matrix.runner }}
     permissions:
       contents: read
       actions: read
@@ -50,12 +50,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: linux-gnu-smoke
-            runner: ubuntu-24.04
-            platform: "@llvm//platforms:linux_amd64"
-          - name: linux-musl-smoke
-            runner: ubuntu-24.04
+          - runner: ubuntu-24.04
             platform: "//:linux_amd64_musl_pie_off"
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            platform: "//:linux_arm64_musl_pie_off"
+            target: aarch64-unknown-linux-musl
+          - runner: macos-15-xlarge
+            platform: "@llvm//platforms:macos_amd64"
+            target: x86_64-apple-darwin
+          - runner: macos-15-xlarge
+            platform: "@llvm//platforms:macos_arm64"
+            target: aarch64-apple-darwin
+          - runner: windows-x64
+            platform: "//:windows_amd64_gnullvm"
+            target: x86_64-pc-windows-gnullvm
+            runs_on:
+              group: codex-runners
+              labels: codex-windows-x64
+          - runner: windows-arm64
+            platform: "//:windows_arm64_gnullvm"
+            target: aarch64-pc-windows-gnullvm
+            runs_on:
+              group: codex-runners
+              labels: codex-windows-arm64
 
     steps:
       - uses: actions/checkout@v6
@@ -63,16 +81,42 @@ jobs:
       - name: Set up Bazel
         uses: bazelbuild/setup-bazelisk@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Provide python3 shim (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $shim_dir = Join-Path $env:RUNNER_TEMP "python3-shim"
+          New-Item -ItemType Directory -Force -Path $shim_dir | Out-Null
+          '@python %*' | Out-File -FilePath (Join-Path $shim_dir 'python3.cmd') -Encoding ascii
+          $shim_dir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Configure Bazel startup args (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "BAZEL_STARTUP_ARGS=--output_user_root=C:\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: bazel canary codex-rs/v8-poc
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+          PLATFORM: ${{ matrix.platform }}
         shell: bash
         run: |
           set -euo pipefail
 
+          bazel_startup_args=()
+          if [[ -n "${BAZEL_STARTUP_ARGS:-}" ]]; then
+            bazel_startup_args+=("${BAZEL_STARTUP_ARGS}")
+          fi
+
           bazel_args=(
             run
-            --platforms="${{ matrix.platform }}"
+            "--platforms=${PLATFORM}"
             //codex-rs/v8-poc:smoke_test
             --build_metadata=REPO_URL=https://github.com/${GITHUB_REPOSITORY}.git
             --build_metadata=COMMIT_SHA=$(git rev-parse HEAD)
@@ -82,14 +126,14 @@ jobs:
 
           if [[ -n "${BUILDBUDDY_API_KEY:-}" ]]; then
             echo "BuildBuddy API key is available; using remote Bazel configuration."
-            bazel \
+            bazel "${bazel_startup_args[@]}" \
               --noexperimental_remote_repo_contents_cache \
               --bazelrc=.github/workflows/ci.bazelrc \
               "${bazel_args[@]}" \
               "--remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}"
           else
             echo "BuildBuddy API key is not available; using local Bazel configuration."
-            bazel \
+            bazel "${bazel_startup_args[@]}" \
               --noexperimental_remote_repo_contents_cache \
               "${bazel_args[@]}" \
               --remote_cache= \
