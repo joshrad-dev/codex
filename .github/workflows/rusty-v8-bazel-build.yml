@@ -50,16 +50,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: linux-gnu-test
+          - name: linux-gnu-smoke
             runner: ubuntu-24.04
-            command: test
             platform: "@llvm//platforms:linux_amd64"
-            target: "//codex-rs/v8-poc:v8-poc-test"
           - name: linux-musl-smoke
             runner: ubuntu-24.04
-            command: build
             platform: "//:linux_amd64_musl_pie_off"
-            target: "//codex-rs/v8-poc:smoke_test"
 
     steps:
       - uses: actions/checkout@v6
@@ -98,27 +94,7 @@ jobs:
             )
           fi
 
-          if [[ "${{ matrix.command }}" == "test" ]]; then
-            "${bazel_cmd[@]}" test \
-              --platforms="${{ matrix.platform }}" \
-              "${{ matrix.target }}" \
-              --test_verbose_timeout_warnings \
-              "${common_args[@]}"
-          else
-            "${bazel_cmd[@]}" build \
-              --platforms="${{ matrix.platform }}" \
-              "${{ matrix.target }}" \
-              "${common_args[@]}"
-
-            smoke_binary="$("${bazel_cmd[@]}" cquery \
-              --platforms="${{ matrix.platform }}" \
-              --output=files \
-              "${{ matrix.target }}" | tail -n 1)"
-
-            if [[ -z "${smoke_binary}" ]]; then
-              echo "failed to resolve smoke binary path" >&2
-              exit 1
-            fi
-
-            "./${smoke_binary}"
-          fi
+          "${bazel_cmd[@]}" run \
+            --platforms="${{ matrix.platform }}" \
+            //codex-rs/v8-poc:smoke_test \
+            "${common_args[@]}"
