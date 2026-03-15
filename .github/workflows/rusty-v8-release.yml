@@ -91,6 +91,10 @@ jobs:
 
           target_suffix="${TARGET//-/_}"
           pair_target="//third_party/v8:rusty_v8_release_pair_${target_suffix}"
+          bazel_startup_args=()
+          if [[ -n "${BAZEL_STARTUP_ARGS:-}" ]]; then
+            bazel_startup_args+=("${BAZEL_STARTUP_ARGS}")
+          fi
 
           bazel_args=(
             build
@@ -103,13 +107,13 @@ jobs:
           )
 
           if [[ -n "${BUILDBUDDY_API_KEY:-}" ]]; then
-            bazel $BAZEL_STARTUP_ARGS \
+            bazel "${bazel_startup_args[@]}" \
               --noexperimental_remote_repo_contents_cache \
               --bazelrc=.github/workflows/ci.bazelrc \
               "${bazel_args[@]}" \
               "--remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}"
           else
-            bazel $BAZEL_STARTUP_ARGS \
+            bazel "${bazel_startup_args[@]}" \
               --noexperimental_remote_repo_contents_cache \
               "${bazel_args[@]}" \
               --remote_cache= \
