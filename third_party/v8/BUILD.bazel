@@ -1,5 +1,5 @@
 load("@rules_cc//cc:cc_static_library.bzl", "cc_static_library")
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -43,6 +43,19 @@ cc_library(
     ],
 )
 
+cc_import(
+    name = "clang_rt_builtins_aarch64_unknown_linux_musl",
+    static_library = "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
+)
+
+cc_library(
+    name = "v8_146_4_0_binding_aarch64_unknown_linux_musl",
+    deps = [
+        ":clang_rt_builtins_aarch64_unknown_linux_musl",
+        ":v8_146_4_0_binding",
+    ],
+)
+
 cc_static_library(
     name = "v8_146_4_0_x86_64_apple_darwin",
     deps = [":v8_146_4_0_binding"],
@@ -65,7 +78,7 @@ cc_static_library(
 
 cc_static_library(
     name = "v8_146_4_0_aarch64_unknown_linux_musl",
-    deps = [":v8_146_4_0_binding"],
+    deps = [":v8_146_4_0_binding_aarch64_unknown_linux_musl"],
 )
 
 cc_static_library(

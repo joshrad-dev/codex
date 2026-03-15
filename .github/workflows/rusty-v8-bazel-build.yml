@@ -101,6 +101,17 @@ jobs:
         run: |
           "BAZEL_STARTUP_ARGS=--output_user_root=C:\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Configure Bazel repository caches (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cache_root = Join-Path $env:RUNNER_TEMP "bazel-cache-${{ matrix.target }}"
+          $repo_contents_cache = Join-Path $cache_root "repo-contents"
+          $repository_cache = Join-Path $cache_root "repo"
+          New-Item -ItemType Directory -Force -Path $repo_contents_cache, $repository_cache | Out-Null
+          "BAZEL_REPO_CONTENTS_CACHE=$($repo_contents_cache -replace '\\', '/')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BAZEL_REPOSITORY_CACHE=$($repository_cache -replace '\\', '/')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: bazel canary codex-rs/v8-poc
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
@@ -123,6 +134,12 @@ jobs:
             --build_metadata=ROLE=CI
             --build_metadata=VISIBILITY=PUBLIC
           )
+          if [[ -n "${BAZEL_REPO_CONTENTS_CACHE:-}" ]]; then
+            bazel_args+=("--repo_contents_cache=${BAZEL_REPO_CONTENTS_CACHE}")
+          fi
+          if [[ -n "${BAZEL_REPOSITORY_CACHE:-}" ]]; then
+            bazel_args+=("--repository_cache=${BAZEL_REPOSITORY_CACHE}")
+          fi
 
           if [[ -n "${BUILDBUDDY_API_KEY:-}" ]]; then
             echo "BuildBuddy API key is available; using remote Bazel configuration."
