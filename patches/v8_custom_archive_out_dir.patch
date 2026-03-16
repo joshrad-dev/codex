@@ -65,7 +65,30 @@
    build_dir().join("gn_out").join("obj")
  }
 
-@@ -843,7 +884,7 @@
+@@ -793,8 +834,14 @@
+
+ fn print_link_flags() {
+   println!("cargo:rustc-link-lib=static=rusty_v8");
++  let target = env::var("TARGET").unwrap();
+   let should_dyn_link_libcxx = env::var("CARGO_FEATURE_USE_CUSTOM_LIBCXX")
+     .is_err()
++    || (custom_archive().is_some()
++      && (target.contains("apple")
++        || target.contains("freebsd")
++        || target.contains("openbsd")
++        || target.contains("android")))
+     || env::var("GN_ARGS").is_ok_and(|gn_args| {
+       gn_args
+         .split_whitespace()
+@@ -808,7 +855,6 @@
+         println!("cargo:rustc-link-lib=dylib={stdlib}");
+       }
+     } else {
+-      let target = env::var("TARGET").unwrap();
+       if target.contains("msvc") {
+         // nothing to link to
+       } else if target.contains("apple")
+@@ -843,7 +889,7 @@
  }
 
  fn print_prebuilt_src_binding_path() {
