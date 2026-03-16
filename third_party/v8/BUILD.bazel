@@ -74,6 +74,10 @@ genrule(
         ":v8_146_4_0_aarch64_unknown_linux_musl_base",
         "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
     ],
+    tools = [
+        "@llvm//tools:llvm-ar",
+        "@llvm//tools:llvm-ranlib",
+    ],
     outs = ["libv8_146_4_0_aarch64_unknown_linux_musl.a"],
     cmd = """
       cat > "$(@D)/merge.mri" <<'EOF'
@@ -83,8 +87,8 @@ addlib $(location @llvm//runtimes/compiler-rt:clang_rt.builtins.static)
 save
 end
 EOF
-      ar -M < "$(@D)/merge.mri"
-      ranlib "$@"
+      $(location @llvm//tools:llvm-ar) -M < "$(@D)/merge.mri"
+      $(location @llvm//tools:llvm-ranlib) "$@"
     """,
 )
 
