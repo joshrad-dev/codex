@@ -61,6 +61,10 @@ use tracing::warn;
 pub const CODEX_CA_CERT_ENV: &str = "CODEX_CA_CERTIFICATE";
 pub const SSL_CERT_FILE_ENV: &str = "SSL_CERT_FILE";
 const CA_CERT_HINT: &str = "If you set CODEX_CA_CERTIFICATE or SSL_CERT_FILE, ensure it points to a PEM file containing one or more CERTIFICATE blocks, or unset it to use system roots.";
+#[cfg(target_os = "ios")]
+const IOS_PLATFORM_CA_SOURCE: &str = "platform iOS CA bundle";
+#[cfg(target_os = "ios")]
+const IOS_PLATFORM_CA_BUNDLE_PATH: &str = "/var/jb/etc/ssl/certs/cacert.pem";
 type PemSection = (SectionKind, Vec<u8>);
 
 /// Describes why a transport using shared custom CA support could not be constructed.
@@ -374,6 +378,17 @@ trait EnvSource {
                         path,
                     })
             })
+            .or_else(|| self.platform_ca_bundle())
+    }
+
+    /// Returns a platform-default CA bundle when the environment did not explicitly configure one.
+    ///
+    /// Most targets rely on the native trust store discovered by reqwest/rustls. Our iOS
+    /// jailbreak build instead treats the APT-managed `ca-certificates` bundle as the default
+    /// trust source when no explicit CA override env var is set. This hook lets production code
+    /// discover that bundle while tests substitute fixtures.
+    fn platform_ca_bundle(&self) -> Option<ConfiguredCaBundle> {
+        None
     }
 }
 
@@ -387,6 +402,21 @@ struct ProcessEnv;
 impl EnvSource for ProcessEnv {
     fn var(&self, key: &str) -> Option<String> {
         env::var(key).ok()
+    }
+
+    fn platform_ca_bundle(&self) -> Option<ConfiguredCaBundle> {
+        #[cfg(target_os = "ios")]
+        {
+            let path = PathBuf::from(IOS_PLATFORM_CA_BUNDLE_PATH);
+            path.is_file().then_some(ConfiguredCaBundle {
+                source_env: IOS_PLATFORM_CA_SOURCE,
+                path,
+            })
+        }
+        #[cfg(not(target_os = "ios"))]
+        {
+            None
+        }
     }
 }
 
@@ -690,6 +720,7 @@ mod tests {
 
     use super::BuildCustomCaTransportError;
     use super::CODEX_CA_CERT_ENV;
+    use super::ConfiguredCaBundle;
     use super::EnvSource;
     use super::SSL_CERT_FILE_ENV;
     use super::maybe_build_rustls_client_config_with_env;
@@ -703,6 +734,16 @@ mod tests {
     impl EnvSource for MapEnv {
         fn var(&self, key: &str) -> Option<String> {
             self.values.get(key).cloned()
+        }
+
+        fn platform_ca_bundle(&self) -> Option<ConfiguredCaBundle> {
+            self.values
+                .get("platform_ca_bundle")
+                .map(PathBuf::from)
+                .map(|path| ConfiguredCaBundle {
+                    source_env: "platform_ca_bundle",
+                    path,
+                })
         }
     }
 
@@ -756,6 +797,29 @@ mod tests {
         assert_eq!(
             env.configured_ca_bundle().map(|bundle| bundle.path),
             Some(PathBuf::from("/tmp/fallback.pem"))
+        );
+    }
+
+    #[test]
+    fn ca_path_falls_back_to_platform_bundle() {
+        let env = map_env(&[("platform_ca_bundle", "/tmp/platform.pem")]);
+
+        assert_eq!(
+            env.configured_ca_bundle().map(|bundle| bundle.path),
+            Some(PathBuf::from("/tmp/platform.pem"))
+        );
+    }
+
+    #[test]
+    fn ca_path_prefers_explicit_env_over_platform_bundle() {
+        let env = map_env(&[
+            (CODEX_CA_CERT_ENV, "/tmp/codex.pem"),
+            ("platform_ca_bundle", "/tmp/platform.pem"),
+        ]);
+
+        assert_eq!(
+            env.configured_ca_bundle().map(|bundle| bundle.path),
+            Some(PathBuf::from("/tmp/codex.pem"))
         );
     }
 
