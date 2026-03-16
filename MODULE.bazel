@@ -108,28 +108,28 @@ crate.annotation(
     ],
     build_script_env_select = {
         "aarch64-apple-darwin": """{
-            "RUSTY_V8_ARCHIVE": "bazel-out/macos_arm64-fastbuild/bin/third_party/v8/libv8_146_4_0_aarch64_apple_darwin.a",
-            "RUSTY_V8_SRC_BINDING_PATH": "external/rules_rs++crate+v8_poc_crates__v8-146.4.0/gen/src_binding_release_aarch64-apple-darwin.rs",
+            "RUSTY_V8_ARCHIVE": "$(execpath @@//third_party/v8:v8_146_4_0_aarch64_apple_darwin)",
+            "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @@//third_party/v8:src_binding_release_aarch64_apple_darwin)",
         }""",
         "aarch64-unknown-linux-gnu": """{
-            "RUSTY_V8_ARCHIVE": "bazel-out/linux_arm64-fastbuild/bin/third_party/v8/libv8_146_4_0_aarch64_unknown_linux_gnu.a",
-            "RUSTY_V8_SRC_BINDING_PATH": "external/rules_rs++crate+v8_poc_crates__v8-146.4.0/gen/src_binding_release_aarch64-unknown-linux-gnu.rs",
+            "RUSTY_V8_ARCHIVE": "$(execpath @@//third_party/v8:v8_146_4_0_aarch64_unknown_linux_gnu)",
+            "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @@//third_party/v8:src_binding_release_aarch64_unknown_linux_gnu)",
         }""",
         "aarch64-unknown-linux-musl": """{
-            "RUSTY_V8_ARCHIVE": "bazel-out/linux_arm64_musl_pie_off-fastbuild/bin/third_party/v8/libv8_146_4_0_aarch64_unknown_linux_musl.a",
-            "RUSTY_V8_SRC_BINDING_PATH": "external/rules_rs++crate+v8_poc_crates__v8-146.4.0/gen/src_binding_release_aarch64-unknown-linux-gnu.rs",
+            "RUSTY_V8_ARCHIVE": "$(execpath @@//third_party/v8:v8_146_4_0_aarch64_unknown_linux_musl)",
+            "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @@//third_party/v8:src_binding_release_aarch64_unknown_linux_musl)",
         }""",
         "x86_64-apple-darwin": """{
-            "RUSTY_V8_ARCHIVE": "bazel-out/macos_amd64-fastbuild/bin/third_party/v8/libv8_146_4_0_x86_64_apple_darwin.a",
-            "RUSTY_V8_SRC_BINDING_PATH": "external/rules_rs++crate+v8_poc_crates__v8-146.4.0/gen/src_binding_release_x86_64-apple-darwin.rs",
+            "RUSTY_V8_ARCHIVE": "$(execpath @@//third_party/v8:v8_146_4_0_x86_64_apple_darwin)",
+            "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @@//third_party/v8:src_binding_release_x86_64_apple_darwin)",
         }""",
         "x86_64-unknown-linux-gnu": """{
-            "RUSTY_V8_ARCHIVE": "bazel-out/linux_amd64-fastbuild/bin/third_party/v8/libv8_146_4_0_x86_64_unknown_linux_gnu.a",
-            "RUSTY_V8_SRC_BINDING_PATH": "external/rules_rs++crate+v8_poc_crates__v8-146.4.0/gen/src_binding_release_x86_64-unknown-linux-gnu.rs",
+            "RUSTY_V8_ARCHIVE": "$(execpath @@//third_party/v8:v8_146_4_0_x86_64_unknown_linux_gnu)",
+            "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @@//third_party/v8:src_binding_release_x86_64_unknown_linux_gnu)",
         }""",
         "x86_64-unknown-linux-musl": """{
-            "RUSTY_V8_ARCHIVE": "bazel-out/linux_amd64_musl_pie_off-fastbuild/bin/third_party/v8/libv8_146_4_0_x86_64_unknown_linux_musl.a",
-            "RUSTY_V8_SRC_BINDING_PATH": "external/rules_rs++crate+v8_poc_crates__v8-146.4.0/gen/src_binding_release_x86_64-unknown-linux-gnu.rs",
+            "RUSTY_V8_ARCHIVE": "$(execpath @@//third_party/v8:v8_146_4_0_x86_64_unknown_linux_musl)",
+            "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @@//third_party/v8:src_binding_release_x86_64_unknown_linux_musl)",
         }""",
     },
     crate = "v8",
