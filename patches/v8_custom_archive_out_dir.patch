@@ -14,7 +14,7 @@
    // Detect if trybuild tests are being compiled.
    let is_trybuild = env::var_os("DENO_TRYBUILD").is_some();
 
-@@ -550,8 +557,32 @@
+@@ -550,8 +557,93 @@
    }
  }
 
@@ -23,24 +23,85 @@
 +  env::var("TARGET").unwrap().replace('-', "_").to_ascii_uppercase()
 +}
 +
++fn resolve_custom_path(path: String) -> String {
++  let path_buf = PathBuf::from(&path);
++  if path_buf.is_absolute() || path_buf.exists() {
++    return path;
++  }
++
++  let mut candidate_roots = Vec::new();
++  if let Ok(current_dir) = env::current_dir() {
++    candidate_roots.push(current_dir);
++  }
++  if let Ok(cargo_manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
++    candidate_roots.push(PathBuf::from(cargo_manifest_dir));
++  }
++
++  for root in candidate_roots {
++    for ancestor in root.ancestors() {
++      let candidate = ancestor.join(&path);
++      if candidate.exists() {
++        return candidate.to_string_lossy().into_owned();
++      }
++    }
++  }
++
++  if let Ok(current_exe) = env::current_exe() {
++    if let Some(exe_name) = current_exe.file_name().and_then(|name| name.to_str())
++    {
++      let runfiles_dir =
++        current_exe.with_file_name(format!("{exe_name}.runfiles"));
++      for base in [runfiles_dir.join("_main"), runfiles_dir] {
++        let candidate = base.join(&path);
++        if candidate.exists() {
++          return candidate.to_string_lossy().into_owned();
++        }
++      }
++    }
++  }
++
++  if let Ok(runfiles_dir) = env::var("RUNFILES_DIR") {
++    let candidate = PathBuf::from(runfiles_dir).join(&path);
++    if candidate.exists() {
++      return candidate.to_string_lossy().into_owned();
++    }
++  }
++
++  if let Ok(runfiles_manifest_file) = env::var("RUNFILES_MANIFEST_FILE") {
++    if let Ok(runfiles_manifest) = fs::read_to_string(runfiles_manifest_file) {
++      for line in runfiles_manifest.lines() {
++        if let Some((short_path, real_path)) = line.split_once(' ') {
++          if short_path == path {
++            return real_path.to_owned();
++          }
++        }
++      }
++    }
++  }
++
++  path
++}
++
 +fn custom_archive() -> Option<String> {
    if let Ok(custom_archive) = env::var("RUSTY_V8_ARCHIVE") {
-+    return Some(custom_archive);
++    return Some(resolve_custom_path(custom_archive));
 +  }
 +
 +  let target_specific_archive =
 +    format!("RUSTY_V8_ARCHIVE_{}", target_specific_env_var_suffix());
-+  env::var(target_specific_archive).ok()
++  env::var(target_specific_archive)
++    .ok()
++    .map(resolve_custom_path)
 +}
 +
 +fn custom_src_binding_path() -> Option<String> {
 +  if let Ok(binding) = env::var("RUSTY_V8_SRC_BINDING_PATH") {
-+    return Some(binding);
++    return Some(resolve_custom_path(binding));
 +  }
 +
 +  let target_specific_binding =
 +    format!("RUSTY_V8_SRC_BINDING_PATH_{}", target_specific_env_var_suffix());
-+  env::var(target_specific_binding).ok()
++  env::var(target_specific_binding).ok().map(resolve_custom_path)
 +}
 +
 +fn static_lib_url() -> String {
@@ -48,7 +109,7 @@
      return custom_archive;
    }
    let default_base = "https://github.com/denoland/rusty_v8/releases/download";
-@@ -578,6 +609,16 @@
+@@ -578,6 +670,16 @@
  }
 
  fn static_lib_dir() -> PathBuf {
@@ -65,7 +126,7 @@
    build_dir().join("gn_out").join("obj")
  }
 
-@@ -793,8 +834,14 @@
+@@ -793,8 +895,14 @@
 
  fn print_link_flags() {
    println!("cargo:rustc-link-lib=static=rusty_v8");
@@ -80,7 +141,7 @@
      || env::var("GN_ARGS").is_ok_and(|gn_args| {
        gn_args
          .split_whitespace()
-@@ -808,7 +855,6 @@
+@@ -808,7 +916,6 @@
          println!("cargo:rustc-link-lib=dylib={stdlib}");
        }
      } else {
@@ -88,7 +149,7 @@
        if target.contains("msvc") {
          // nothing to link to
        } else if target.contains("apple")
-@@ -843,7 +889,7 @@
+@@ -843,7 +950,7 @@
  }
 
  fn print_prebuilt_src_binding_path() {
