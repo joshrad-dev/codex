@@ -19,18 +19,24 @@
 //! OSC 52, and WSL fallback is centralized here so `/copy` does not have to
 //! understand platform-specific clipboard behavior.
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use base64::Engine as _;
-#[cfg(all(not(target_os = "android"), unix))]
+#[cfg(all(not(any(target_os = "android", target_os = "ios")), unix))]
 use std::fs::OpenOptions;
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use std::io::Write;
-#[cfg(all(not(target_os = "android"), windows))]
+#[cfg(all(not(any(target_os = "android", target_os = "ios")), windows))]
 use std::io::stdout;
-#[cfg(all(not(target_os = "android"), target_os = "linux"))]
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    target_os = "linux"
+))]
 use std::process::Stdio;
 
-#[cfg(all(not(target_os = "android"), target_os = "linux"))]
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    target_os = "linux"
+))]
 use crate::clipboard_paste::is_probably_wsl;
 
 /// Copies user-visible text into the most appropriate clipboard for the
@@ -52,7 +58,7 @@ use crate::clipboard_paste::is_probably_wsl;
 ///
 /// Returns a descriptive error string when the selected clipboard mechanism is
 /// unavailable or the fallback path also fails.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn copy_text_to_clipboard(text: &str) -> Result<(), String> {
     if std::env::var_os("SSH_CONNECTION").is_some() || std::env::var_os("SSH_TTY").is_some() {
         return copy_via_osc52(text);
@@ -86,7 +92,7 @@ pub fn copy_text_to_clipboard(text: &str) -> Result<(), String> {
 /// controlling TTY so the escape sequence reaches the terminal even if stdout
 /// is redirected; on Windows it writes to stdout because the console is the
 /// transport.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn copy_via_osc52(text: &str) -> Result<(), String> {
     let sequence = osc52_sequence(text, std::env::var_os("TMUX").is_some());
     #[cfg(unix)]
@@ -121,7 +127,10 @@ fn copy_via_osc52(text: &str) -> Result<(), String> {
 /// the Windows clipboard from inside WSL. It shells out to `powershell.exe`,
 /// streams the text over stdin as UTF-8, and waits for the process to report
 /// success before returning to the caller.
-#[cfg(all(not(target_os = "android"), target_os = "linux"))]
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    target_os = "linux"
+))]
 fn copy_via_wsl_clipboard(text: &str) -> Result<(), String> {
     let mut child = std::process::Command::new("powershell.exe")
         .stdin(Stdio::piped())
@@ -176,7 +185,7 @@ fn copy_via_wsl_clipboard(text: &str) -> Result<(), String> {
 ///
 /// When `tmux` is true the sequence is wrapped in the tmux passthrough form so
 /// nested terminals still receive the clipboard escape.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn osc52_sequence(text: &str, tmux: bool) -> String {
     let payload = base64::engine::general_purpose::STANDARD.encode(text);
     if tmux {
@@ -186,16 +195,16 @@ fn osc52_sequence(text: &str, tmux: bool) -> String {
     }
 }
 
-/// Reports that clipboard text copy is unavailable on Android builds.
+/// Reports that clipboard text copy is unavailable on unsupported mobile builds.
 ///
 /// The TUI's clipboard implementation depends on host integrations that are not
-/// available in the supported Android/Termux environment.
-#[cfg(target_os = "android")]
+/// available in the supported Android/Termux and iOS environments.
+#[cfg(any(target_os = "android", target_os = "ios"))]
 pub fn copy_text_to_clipboard(_text: &str) -> Result<(), String> {
-    Err("clipboard text copy is unsupported on Android".into())
+    Err("clipboard text copy is unsupported on this platform".into())
 }
 
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;

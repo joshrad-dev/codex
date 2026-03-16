@@ -183,7 +183,7 @@ impl SlashCommand {
     fn is_visible(self) -> bool {
         match self {
             SlashCommand::SandboxReadRoot => cfg!(target_os = "windows"),
-            SlashCommand::Copy => !cfg!(target_os = "android"),
+            SlashCommand::Copy => !cfg!(any(target_os = "android", target_os = "ios")),
             SlashCommand::Rollout | SlashCommand::TestApproval => cfg!(debug_assertions),
             _ => true,
         }
