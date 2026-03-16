@@ -2,6 +2,7 @@ mod compact;
 mod ghost_snapshot;
 mod regular;
 mod review;
+mod startup_prewarm;
 mod undo;
 mod user_shell;
 
@@ -50,6 +51,8 @@ pub(crate) use compact::CompactTask;
 pub(crate) use ghost_snapshot::GhostSnapshotTask;
 pub(crate) use regular::RegularTask;
 pub(crate) use review::ReviewTask;
+pub(crate) use startup_prewarm::StartupPrewarmHandle;
+pub(crate) use startup_prewarm::StartupPrewarmResolution;
 pub(crate) use undo::UndoTask;
 pub(crate) use user_shell::UserShellCommandMode;
 pub(crate) use user_shell::UserShellCommandTask;

@@ -142,6 +142,38 @@ fn skill_message(text: &str) -> ResponseItem {
     }
 }
 
+#[tokio::test]
+async fn resolve_startup_prewarm_returns_ready_task_when_finished() {
+    let handle = tokio::spawn(async { Ok(RegularTask::default()) });
+    tokio::task::yield_now().await;
+
+    let (resolution, _age_at_first_turn) =
+        crate::tasks::StartupPrewarmHandle::new(handle, std::time::Instant::now())
+            .resolve()
+            .await;
+
+    assert!(matches!(
+        resolution,
+        crate::tasks::StartupPrewarmResolution::Ready(_)
+    ));
+}
+
+#[tokio::test]
+async fn resolve_startup_prewarm_aborts_unfinished_task() {
+    let (_tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let handle = tokio::spawn(async move {
+        let _ = rx.await;
+        Ok(RegularTask::default())
+    });
+
+    let (resolution, _age_at_first_turn) =
+        crate::tasks::StartupPrewarmHandle::new(handle, std::time::Instant::now())
+            .resolve()
+            .await;
+
+    assert_eq!(resolution.metric_status(), "aborted_not_ready");
+}
+
 fn developer_input_texts(items: &[ResponseItem]) -> Vec<&str> {
     items
         .iter()

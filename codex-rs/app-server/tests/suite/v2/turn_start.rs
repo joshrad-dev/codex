@@ -56,6 +56,8 @@ use codex_protocol::config_types::Settings;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
 use core_test_support::responses;
+use core_test_support::responses::WebSocketConnectionConfig;
+use core_test_support::responses::start_websocket_server_with_headers;
 use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -506,6 +508,83 @@ async fn turn_start_emits_notifications_and_accepts_model_override() -> Result<(
     assert_eq!(completed2.thread_id, thread.id);
     assert_eq!(completed2.turn.id, turn2.id);
     assert_eq!(completed2.turn.status, TurnStatus::Completed);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn turn_start_does_not_wait_for_startup_prewarm_when_not_ready() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let fast_timeout = std::time::Duration::from_millis(900);
+
+    let websocket_server = start_websocket_server_with_headers(vec![WebSocketConnectionConfig {
+        requests: vec![Vec::new()],
+        response_headers: Vec::new(),
+        accept_delay: None,
+        close_after_requests: false,
+    }])
+    .await;
+    create_websocket_timeout_config_toml(codex_home.path(), websocket_server.uri(), "never")?;
+
+    let mut mcp = McpProcess::new(codex_home.path()).await?;
+    timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
+
+    let thread_req = mcp
+        .send_thread_start_request(ThreadStartParams {
+            model: Some("mock-model".to_string()),
+            ..Default::default()
+        })
+        .await?;
+    let thread_resp: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(thread_req)),
+    )
+    .await??;
+    let ThreadStartResponse { thread, .. } = to_response::<ThreadStartResponse>(thread_resp)?;
+
+    timeout(
+        std::time::Duration::from_secs(2),
+        websocket_server.wait_for_request(0, 0),
+    )
+    .await
+    .expect("startup websocket prewarm should issue a request");
+
+    let turn_req = mcp
+        .send_turn_start_request(TurnStartParams {
+            thread_id: thread.id.clone(),
+            input: vec![V2UserInput::Text {
+                text: "Hello".to_string(),
+                text_elements: Vec::new(),
+            }],
+            ..Default::default()
+        })
+        .await?;
+    let turn_resp: JSONRPCResponse = timeout(
+        DEFAULT_READ_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(turn_req)),
+    )
+    .await??;
+    let TurnStartResponse { turn } = to_response::<TurnStartResponse>(turn_resp)?;
+
+    let notif: JSONRPCNotification = timeout(
+        fast_timeout,
+        mcp.read_stream_until_notification_message("turn/started"),
+    )
+    .await??;
+    let started: TurnStartedNotification =
+        serde_json::from_value(notif.params.expect("params must be present"))?;
+    assert_eq!(started.thread_id, thread.id);
+    assert_eq!(started.turn.id, turn.id);
+    assert_eq!(started.turn.status, TurnStatus::InProgress);
+
+    mcp.interrupt_turn_and_wait_for_aborted(
+        thread.id.clone(),
+        turn.id.clone(),
+        DEFAULT_READ_TIMEOUT,
+    )
+    .await?;
+
+    websocket_server.shutdown().await;
 
     Ok(())
 }
@@ -2398,6 +2477,38 @@ base_url = "{server_uri}/v1"
 wire_api = "responses"
 request_max_retries = 0
 stream_max_retries = 0
+"#
+        ),
+    )
+}
+
+fn create_websocket_timeout_config_toml(
+    codex_home: &Path,
+    server_uri: &str,
+    approval_policy: &str,
+) -> std::io::Result<()> {
+    let config_toml = codex_home.join("config.toml");
+    std::fs::write(
+        config_toml,
+        format!(
+            r#"
+model = "mock-model"
+approval_policy = "{approval_policy}"
+sandbox_mode = "read-only"
+
+model_provider = "mock_provider"
+
+[features]
+responses_websockets = true
+
+[model_providers.mock_provider]
+name = "Mock provider for websocket timeout test"
+base_url = "{server_uri}/v1"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = 0
+stream_idle_timeout_ms = 1000
+supports_websockets = true
 "#
         ),
     )

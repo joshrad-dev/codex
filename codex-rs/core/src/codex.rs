@@ -5,6 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Instant;
 
 use crate::AuthManager;
 use crate::CodexAuth;
@@ -290,6 +291,7 @@ use crate::tasks::RegularTask;
 use crate::tasks::ReviewTask;
 use crate::tasks::SessionTask;
 use crate::tasks::SessionTaskContext;
+use crate::tasks::StartupPrewarmResolution;
 use crate::tools::ToolRouter;
 use crate::tools::context::SharedTurnDiffTracker;
 use crate::tools::discoverable::DiscoverableTool;
@@ -313,6 +315,9 @@ use crate::windows_sandbox::WindowsSandboxLevelExt;
 use codex_async_utils::OrCancelExt;
 use codex_otel::SessionTelemetry;
 use codex_otel::TelemetryAuthMode;
+use codex_otel::metrics::names::STARTUP_PREWARM_AGE_AT_FIRST_TURN_METRIC;
+use codex_otel::metrics::names::STARTUP_PREWARM_DURATION_METRIC;
+use codex_otel::metrics::names::STARTUP_PREWARM_METRIC;
 use codex_otel::metrics::names::THREAD_STARTED_METRIC;
 use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::config_types::Personality;
@@ -2407,19 +2412,36 @@ impl Session {
             .await
     }
 
-    pub(crate) async fn take_startup_regular_task(&self) -> Option<RegularTask> {
-        let startup_regular_task = {
+    pub(crate) async fn take_startup_prewarmed_task(&self) -> Option<RegularTask> {
+        let startup_prewarm = {
             let mut state = self.state.lock().await;
-            state.take_startup_regular_task()
+            state.take_startup_prewarm()
         };
-        let startup_regular_task = startup_regular_task?;
-        match startup_regular_task.await {
-            Ok(Ok(regular_task)) => Some(regular_task),
-            Ok(Err(err)) => {
+        let Some(startup_prewarm) = startup_prewarm else {
+            return None;
+        };
+        let (resolution, age_at_first_turn) = startup_prewarm.resolve().await;
+        let status = resolution.metric_status();
+        self.services
+            .session_telemetry
+            .counter(STARTUP_PREWARM_METRIC, 1, &[("status", status)]);
+        self.services.session_telemetry.record_duration(
+            STARTUP_PREWARM_AGE_AT_FIRST_TURN_METRIC,
+            age_at_first_turn,
+            &[("status", status)],
+        );
+
+        match resolution {
+            StartupPrewarmResolution::Ready(regular_task) => Some(*regular_task),
+            StartupPrewarmResolution::AbortedNotReady => {
+                debug!("startup websocket prewarm not ready when first turn started; aborting");
+                None
+            }
+            StartupPrewarmResolution::Failed(err) => {
                 warn!("startup websocket prewarm setup failed: {err:#}");
                 None
             }
-            Err(err) => {
+            StartupPrewarmResolution::JoinFailed(err) => {
                 warn!("startup websocket prewarm setup join failed: {err}");
                 None
             }
@@ -2428,12 +2450,25 @@ impl Session {
 
     async fn schedule_startup_prewarm(self: &Arc<Self>, base_instructions: String) {
         let sess = Arc::clone(self);
-        let startup_regular_task: JoinHandle<CodexResult<RegularTask>> =
-            tokio::spawn(
-                async move { sess.schedule_startup_prewarm_inner(base_instructions).await },
+        let session_telemetry = self.services.session_telemetry.clone();
+        let started_at = Instant::now();
+        let startup_prewarm: JoinHandle<CodexResult<RegularTask>> = tokio::spawn(async move {
+            let result = sess.schedule_startup_prewarm_inner(base_instructions).await;
+            let status = if result.is_ok() { "ready" } else { "failed" };
+            session_telemetry.record_duration(
+                STARTUP_PREWARM_DURATION_METRIC,
+                started_at.elapsed(),
+                &[("status", status)],
             );
+            result
+        });
         let mut state = self.state.lock().await;
-        state.set_startup_regular_task(startup_regular_task);
+        state.set_startup_prewarm(startup_prewarm, started_at);
+        self.services.session_telemetry.counter(
+            STARTUP_PREWARM_METRIC,
+            1,
+            &[("status", "scheduled")],
+        );
     }
 
     async fn schedule_startup_prewarm_inner(
@@ -4539,7 +4574,7 @@ mod handlers {
         if let Err(SteerInputError::NoActiveTurn(items)) = sess.steer_input(items, None).await {
             sess.refresh_mcp_servers_if_requested(&current_context)
                 .await;
-            let regular_task = sess.take_startup_regular_task().await.unwrap_or_default();
+            let regular_task = sess.take_startup_prewarmed_task().await.unwrap_or_default();
             sess.spawn_task(Arc::clone(&current_context), items, regular_task)
                 .await;
         }

@@ -4,6 +4,7 @@ use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseItem;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::Instant;
 use tokio::task::JoinHandle;
 
 use crate::codex::PreviousTurnSettings;
@@ -15,6 +16,7 @@ use crate::protocol::TokenUsage;
 use crate::protocol::TokenUsageInfo;
 use crate::sandboxing::merge_permission_profiles;
 use crate::tasks::RegularTask;
+use crate::tasks::StartupPrewarmHandle;
 use crate::truncate::TruncationPolicy;
 use codex_protocol::protocol::TurnContextItem;
 
@@ -31,7 +33,7 @@ pub(crate) struct SessionState {
     /// reinjection after resume or `/compact`).
     previous_turn_settings: Option<PreviousTurnSettings>,
     /// Startup regular task pre-created during session initialization.
-    pub(crate) startup_regular_task: Option<JoinHandle<CodexResult<RegularTask>>>,
+    pub(crate) startup_prewarm: Option<StartupPrewarmHandle>,
     pub(crate) active_connector_selection: HashSet<String>,
     pub(crate) pending_session_start_source: Option<codex_hooks::SessionStartSource>,
     granted_permissions: Option<PermissionProfile>,
@@ -49,7 +51,7 @@ impl SessionState {
             dependency_env: HashMap::new(),
             mcp_dependency_prompted: HashSet::new(),
             previous_turn_settings: None,
-            startup_regular_task: None,
+            startup_prewarm: None,
             active_connector_selection: HashSet::new(),
             pending_session_start_source: None,
             granted_permissions: None,
@@ -165,14 +167,16 @@ impl SessionState {
         self.dependency_env.clone()
     }
 
-    pub(crate) fn set_startup_regular_task(&mut self, task: JoinHandle<CodexResult<RegularTask>>) {
-        self.startup_regular_task = Some(task);
+    pub(crate) fn set_startup_prewarm(
+        &mut self,
+        task: JoinHandle<CodexResult<RegularTask>>,
+        started_at: Instant,
+    ) {
+        self.startup_prewarm = Some(StartupPrewarmHandle::new(task, started_at));
     }
 
-    pub(crate) fn take_startup_regular_task(
-        &mut self,
-    ) -> Option<JoinHandle<CodexResult<RegularTask>>> {
-        self.startup_regular_task.take()
+    pub(crate) fn take_startup_prewarm(&mut self) -> Option<StartupPrewarmHandle> {
+        self.startup_prewarm.take()
     }
 
     // Adds connector IDs to the active set and returns the merged selection.
