@@ -537,10 +537,13 @@ fn status_summary_line(status: &AgentStatus) -> Line<'static> {
     status_summary_spans(status).into()
 }
 
+// Allow `.yellow()`
+#[allow(clippy::disallowed_methods)]
 fn status_summary_spans(status: &AgentStatus) -> Vec<Span<'static>> {
     match status {
         AgentStatus::PendingInit => vec![Span::from("Pending init").cyan()],
         AgentStatus::Running => vec![Span::from("Running").cyan().bold()],
+        AgentStatus::Interrupted => vec![Span::from("Interrupted").yellow()],
         AgentStatus::Completed(message) => {
             let mut spans = vec![Span::from("Completed").green()];
             if let Some(message) = message.as_ref() {
@@ -760,6 +763,12 @@ mod tests {
         assert!(!title.spans[4].style.add_modifier.contains(Modifier::DIM));
         assert_eq!(title.spans[6].content.as_ref(), "(gpt-5 high)");
         assert_eq!(title.spans[6].style.fg, Some(Color::Magenta));
+    }
+
+    #[test]
+    fn interrupted_status_summary_is_yellow() {
+        let spans = status_summary_spans(&AgentStatus::Interrupted);
+        assert_eq!(spans, vec![Span::from("Interrupted").yellow()]);
     }
 
     fn cell_to_text(cell: &PlainHistoryCell) -> String {
