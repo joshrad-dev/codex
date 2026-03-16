@@ -8665,6 +8665,28 @@ async fn model_selection_queues_selected_action_while_task_running() {
 }
 
 #[tokio::test]
+async fn model_selection_queues_behind_existing_queued_inputs() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.1-codex")).await;
+    chat.queued_user_messages
+        .push_back("older queued input".into());
+
+    chat.handle_serialized_slash_command(ChatWidget::model_selection_draft(
+        "gpt-5.1-codex-max",
+        Some(ReasoningEffortConfig::High),
+        ModelSelectionScope::Global,
+    ));
+
+    assert_eq!(
+        chat.queued_user_message_texts(),
+        vec![
+            "older queued input".to_string(),
+            "/model gpt-5.1-codex-max high".to_string(),
+        ]
+    );
+    assert_no_submit_op(&mut op_rx);
+}
+
+#[tokio::test]
 async fn interrupt_restores_queued_model_selection_into_composer() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.1-codex")).await;
     chat.on_task_started();

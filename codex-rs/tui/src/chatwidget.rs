@@ -5861,8 +5861,8 @@ impl ChatWidget {
             self.restore_user_message_to_composer(draft);
             return;
         };
-        if self.bottom_pane.is_task_running()
-            && !matches!(cmd.execution_kind(), SlashCommandExecutionKind::Immediate)
+        if !matches!(cmd.execution_kind(), SlashCommandExecutionKind::Immediate)
+            && (self.bottom_pane.is_task_running() || !self.queued_user_messages.is_empty())
         {
             self.queue_user_message(draft);
             return;
