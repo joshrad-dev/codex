@@ -56,24 +56,25 @@ jobs:
           - runner: ubuntu-24.04-arm
             platform: "//:linux_arm64_musl_pie_off"
             target: aarch64-unknown-linux-musl
-          - runner: macos-15-xlarge
+          - runner: macos-15-large
             platform: "@llvm//platforms:macos_amd64"
             target: x86_64-apple-darwin
           - runner: macos-15-xlarge
             platform: "@llvm//platforms:macos_arm64"
             target: aarch64-apple-darwin
-          - runner: windows-x64
-            platform: "//:windows_amd64_gnullvm"
-            target: x86_64-pc-windows-gnullvm
-            runs_on:
-              group: codex-runners
-              labels: codex-windows-x64
-          - runner: windows-arm64
-            platform: "//:windows_arm64_gnullvm"
-            target: aarch64-pc-windows-gnullvm
-            runs_on:
-              group: codex-runners
-              labels: codex-windows-arm64
+          # 2026-03-16: Disabling windows since windows is disabled for all bazel atm
+          # - runner: windows-x64
+          #   platform: "//:windows_amd64_gnullvm"
+          #   target: x86_64-pc-windows-gnullvm
+          #   runs_on:
+          #     group: codex-runners
+          #     labels: codex-windows-x64
+          # - runner: windows-arm64
+          #   platform: "//:windows_arm64_gnullvm"
+          #   target: aarch64-pc-windows-gnullvm
+          #   runs_on:
+          #     group: codex-runners
+          #     labels: codex-windows-arm64
 
     steps:
       - uses: actions/checkout@v6

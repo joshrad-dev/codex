@@ -26,7 +26,7 @@ jobs:
           - runner: macos-15-xlarge
             platform: macos_arm64
             target: aarch64-apple-darwin
-          - runner: macos-15-xlarge
+          - runner: macos-15-large
             platform: macos_amd64
             target: x86_64-apple-darwin
           - runner: ubuntu-24.04
@@ -41,18 +41,19 @@ jobs:
           - runner: ubuntu-24.04-arm
             platform: linux_arm64
             target: aarch64-unknown-linux-gnu
-          - runner: windows-x64
-            platform: windows_amd64
-            target: x86_64-pc-windows-msvc
-            runs_on:
-              group: codex-runners
-              labels: codex-windows-x64
-          - runner: windows-arm64
-            platform: windows_arm64
-            target: aarch64-pc-windows-msvc
-            runs_on:
-              group: codex-runners
-              labels: codex-windows-arm64
+          # 2026-03-16: Disable windows since its disabled for all bazel builds
+          #- runner: windows-x64
+          #  platform: windows_amd64
+          #  target: x86_64-pc-windows-msvc
+          #  runs_on:
+          #    group: codex-runners
+          #    labels: codex-windows-x64
+          #- runner: windows-arm64
+          #  platform: windows_arm64
+          #  target: aarch64-pc-windows-msvc
+          #  runs_on:
+          #    group: codex-runners
+          #    labels: codex-windows-arm64
 
     steps:
       - uses: actions/checkout@v6
