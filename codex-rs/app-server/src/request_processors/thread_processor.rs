@@ -3450,7 +3450,7 @@ impl ThreadRequestProcessor {
                     Some(providers)
                 }
             }
-            None => Some(vec![self.config.model_provider_id.clone()]),
+            None => None,
         };
         let (allowed_sources_vec, source_kind_filter) = compute_source_filters(source_kinds);
         let allowed_sources = allowed_sources_vec.as_slice();
